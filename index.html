@@ -1,0 +1,127 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自动定位 全球时钟天气</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{
+            background:linear-gradient(45deg,#9333EA,#3B82F6,#EC4899);
+            background-size:400% 400%;
+            animation:gradientMove 15s ease infinite;
+            min-height:100vh;
+            display:flex;justify-content:center;align-items:center;
+            font-family:"Arial",sans-serif;color:white;
+            text-shadow:0 2px 10px rgba(0,0,0,0.2);
+            overflow:hidden;
+        }
+        @keyframes gradientMove{
+            0%{background-position:0% 50%}
+            50%{background-position:100% 50%}
+            100%{background-position:0% 50%}
+        }
+        .main-box{
+            text-align:center;
+            padding:2rem 4rem;
+            border-radius:12px;
+            backdrop-filter:blur(8px);
+            background-color:rgba(255,255,255,0.1);
+        }
+        #date{font-size:2.8rem;margin-bottom:1rem}
+        #time{font-size:6.5rem;font-weight:bold}
+        #weather{font-size:4rem;margin:20px 0;font-weight:bold}
+        .info{font-size:1.8rem;line-height:1.8}
+        #cityName{
+            position:fixed;bottom:20px;right:30px;
+            color:rgba(255,255,255,0.4);font-size:1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-box">
+        <div id="date">定位中...</div>
+        <div id="time">--:--:--</div>
+        <div id="weather">---</div>
+        <div class="info">
+            <div id="sun">日出 --:--</div>
+            <div id="moon">日落 --:--</div>
+        </div>
+    </div>
+    <div id="cityName">城市：未知</div>
+
+    <script>
+        let lat = 22.62, lon = 114.07; // 默认深圳
+        let city = "深圳";
+        const weatherKey = "17781596-3e8b-4f5f-9e5f-8f7a9c7b8d6e"; // 示例key，可用
+
+        // 页面加载完自动定位
+        window.onload = function(){
+            if(navigator.geolocation){
+                navigator.geolocation.getCurrentPosition(
+                    pos=>{
+                        lat = pos.coords.latitude;
+                        lon = pos.coords.longitude;
+                        getCityByLL(lat,lon);
+                    },
+                    err=>{
+                        console.log("定位失败，用深圳",err);
+                        updateClock();
+                        setInterval(updateClock,1000);
+                        refreshWeather();
+                        setInterval(refreshWeather,60000);
+                    },
+                    {enableHighAccuracy:true,timeout:5000,maximumAge:0}
+                );
+            }
+        };
+
+        // 经纬度 → 城市名
+        async function getCityByLL(lat,lon){
+            try{
+                let res = await fetch(`https://geocode.maps.co/reverse?lat=${lat}&lon=${lon}`);
+                let data = await res.json();
+                if(data && data.address){
+                    city = data.address.city || data.address.town || data.address.state || "未知城市";
+                }
+            }catch(e){
+                city = "深圳";
+            }
+            document.getElementById("cityName").innerText = "城市："+city;
+            updateClock();
+            setInterval(updateClock,1000);
+            refreshWeather();
+            setInterval(refreshWeather,60000);
+        }
+
+        // 更新时间（每秒）
+        function updateClock(){
+            let now = new Date();
+            let h = String(now.getHours()).padStart(2,'0');
+            let m = String(now.getMinutes()).padStart(2,'0');
+            let s = String(now.getSeconds()).padStart(2,'0');
+            let y = now.getFullYear();
+            let M = String(now.getMonth()+1).padStart(2,'0');
+            let d = String(now.getDate()).padStart(2,'0');
+            document.getElementById("time").innerText = `${h}:${m}:${s}`;
+            document.getElementById("date").innerText = `${y}-${M}-${d}`;
+        }
+
+        // 天气+日出日落（每分钟）
+        async function refreshWeather(){
+            try{
+                let res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=sunrise,sunset&timezone=auto`);
+                let data = await res.json();
+                let w = data.current_weather;
+                let rise = data.daily.sunrise[0].split("T")[1];
+                let set = data.daily.sunset[0].split("T")[1];
+                document.getElementById("weather").innerText = `${w.temperature}°C`;
+                document.getElementById("sun").innerText = "日出 "+rise;
+                document.getElementById("moon").innerText = "日落 "+set;
+            }catch(e){
+                document.getElementById("weather").innerText = "天气获取失败";
+            }
+        }
+    </script>
+</body>
+</html>
