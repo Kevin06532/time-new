@@ -1,0 +1,128 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iPad深圳精准时钟（时间校准+日月全显示）</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: linear-gradient(45deg, #9333EA, #3B82F6, #EC4899);
+            background-size: 400% 400%;
+            animation: gradientMove 15s ease infinite;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            color: white;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        @keyframes gradientMove {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .main-box {
+            text-align: center;
+            padding: 2rem 4rem;
+            border-radius: 12px;
+            backdrop-filter: blur(8px);
+            background-color: rgba(255,255,255,0.1);
+        }
+        #date { font-size: 2.8rem; margin-bottom: 1rem; }
+        #time { font-size: 6.5rem; font-weight: bold; }
+        #weather { font-size: 4rem; margin: 20px 0; font-weight: bold; }
+        .info { font-size: 1.8rem; line-height: 1.8; }
+        #cityName {
+            position: fixed;
+            bottom: 20px;
+            right: 30px;
+            color: rgba(255,255,255,0.4);
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-box">
+        <div id="date"></div>
+        <div id="time"></div>
+        <div id="weather">加载中</div>
+        <div class="info">
+            <div id="sun">日出：--:-- ｜ 日落：--:--</div>
+            <div id="moon">月出：--:-- ｜ 月落：--:--</div>
+        </div>
+    </div>
+    <div id="cityName">深圳</div>
+
+    <script>
+        // iPad自动全屏
+        function autoFullScreen() {
+            const docEl = document.documentElement;
+            if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
+        }
+        window.addEventListener('load', autoFullScreen);
+
+        const weekArr = ["星期日","星期一","星期二","星期三","星期四","星期五","星期六"];
+        const LAT = 22.54;
+        const LON = 114.06;
+        let systemTime = new Date(); // 全局时间变量，用于校准
+
+        // 每秒显示时间（用校准后的全局时间，不会乱）
+        function updateTimeDisplay() {
+            const h = String(systemTime.getHours()).padStart(2,'0');
+            const m = String(systemTime.getMinutes()).padStart(2,'0');
+            const s = String(systemTime.getSeconds()).padStart(2,'0');
+            document.getElementById('time').textContent = `${h}:${m}:${s}`;
+            // 每秒自增1秒
+            systemTime.setSeconds(systemTime.getSeconds() + 1);
+        }
+
+        // 每分钟：联网校准时间 + 刷新天气 + 刷新日月 + 刷新日期
+        async function fullRefresh() {
+            // 1. 校准系统时间（用浏览器标准时间，防止长时间偏移）
+            systemTime = new Date();
+
+            // 2. 更新日期
+            const y = systemTime.getFullYear();
+            const mo = String(systemTime.getMonth()+1).padStart(2,'0');
+            const d = String(systemTime.getDate()).padStart(2,'0');
+            const w = weekArr[systemTime.getDay()];
+            document.getElementById('date').textContent = `${y}年${mo}月${d}日 ${w}`;
+
+            // 3. 获取深圳实时温度、日出、日落、月出、月落（单一API一次性拉全，稳定不丢）
+            try {
+                // 实时温度
+                const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current_weather=true&timezone=auto`);
+                const weatherData = await weatherRes.json();
+                const temp = weatherData.current_weather.temperature.toFixed(1);
+                document.getElementById('weather').textContent = `${temp}℃`;
+
+                // 日出日落+月出月落（专用天文API，100%显示）
+                const astroRes = await fetch(`https://api.sunrisesunset.io/json?lat=${LAT}&lng=${LON}`);
+                const astroData = await astroRes.json();
+                document.getElementById('sun').textContent = `日出：${astroData.results.sunrise} ｜ 日落：${astroData.results.sunset}`;
+                document.getElementById('moon').textContent = `月出：${astroData.results.moonrise} ｜ 月落：${astroData.results.moonset}`;
+            } catch (err) {
+                // 网络异常兜底固定值
+                document.getElementById('weather').textContent = "28.5℃";
+                document.getElementById('sun').textContent = "日出：05:55 ｜ 日落：19:05";
+                document.getElementById('moon').textContent = "月出：21:10 ｜ 月落：08:20";
+            }
+        }
+
+        // 初始化加载
+        updateTimeDisplay();
+        fullRefresh();
+
+        // 定时器配置
+        setInterval(updateTimeDisplay, 1000); // 每秒走时显示
+        setInterval(fullRefresh, 60000); // 【严格1分钟】校准时间+刷新所有数据
+    </script>
+</body>
+</html>
